@@ -213,18 +213,23 @@ class Minimap_Generator():
         return
 
 def main():
-    conf = configparser.RawConfigParser()
-    conf.read("settings.ini")
-    mmap = Minimap_Generator(conf.get("General", "VideoPath"), conf.get("General", "DataPath"), int(conf.get("General", "Resolution")), conf.get("General", "DatetimeFormat"), int(conf.get("General", "VideoFPS")))
+    # conf = configparser.RawConfigParser()
+    # conf.read("settings.ini")
+    # mmap = Minimap_Generator(conf.get("General", "VideoPath"), conf.get("General", "DataPath"), int(conf.get("General", "Resolution")), conf.get("General", "DatetimeFormat"), int(conf.get("General", "VideoFPS")))
     # mmap.generate_video()
-    mmap.generate_ffmpeg_command()
+    # mmap.generate_ffmpeg_command()
+
+    command = [
+    'ffmpeg', '-i', 'video_in/umhab-147.mp4', '-vf',
+    'movie=minimap.mp4 [over]; [in][over] overlay=0:main_h-overlay_h, sendcmd=f=altitude.cmd,drawtext=text=\'\'',
+    '-preset', 'veryfast', 'video_out/test.mp4'
+    ]
+    subprocess.run(command)
+    # subprocess.run(["ffmpeg", "-i", "video_in/umhab-147.mp4", "-vf", "\"movie=minimap.mp4", "[over];", "[in][over]", "overlay=0:main_h-overlay_h,", "sendcmd=f=altitude.cmd,drawtext=text=''\"", "-preset", "veryfast", "video_out/test.mp4"])
 
 
 # ffmpeg -i video_in/umhab-147.mp4 -vf "movie=minimap.mp4 [over]; [in][over] overlay=0:main_h-overlay_h, sendcmd=f=altitude.cmd,drawtext=text=''" -preset veryfast video_out/test.mp4
 
-# ffmpeg -i umhab-147.mp4 -vf "movie=../minimap.mp4 [over]; [in][over] overlay" -preset veryfast umhab-147-2.mp4
-# ffmpeg -i umhab-147.mp4 -vf "movie=../minimap.mp4 [over]; [in][over] overlay=0:main_h-overlay_h" -preset veryfast umhab-147-2.mp4
-# ffmpeg -i video_in/umhab-147.mp4 -vf "sendcmd=f=altitude.cmd,drawtext=text=''" -preset veryfast ./video_out/test.mp4
 
 if __name__ == "__main__":
     main()
