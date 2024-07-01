@@ -1,0 +1,4 @@
+numpy
+folium
+sudo apt install ffmpeg
+sudo apt install wkhtmltopdf
