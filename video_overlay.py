@@ -11,9 +11,9 @@ import configparser
 import subprocess
 
 class Minimap_Generator():
-    def __init__(self, data_path, resolution, dt_format, vid_fps, vid_speed):
+    def __init__(self, data_path, resolution, dt_format, vid_fps, vid_speed, mmap_scale):
         self.resolution = resolution
-        self.minimap_resolution = int(self.resolution / 2)
+        self.minimap_resolution = int(self.resolution / mmap_scale)
         self.data_path = data_path
         self.dt_format = dt_format
         self.vid_fps = vid_fps
@@ -28,12 +28,12 @@ class Minimap_Generator():
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <style>
                 #map {{
-                    width: 540px;
-                    height: 540px;
+                    width: {mmap_res}px;
+                    height: {mmap_res}px;
                 }}
                 .leaflet-container {{
-                    width: 540px !important;
-                    height: 540px !important;
+                    width: {mmap_res}px !important;
+                    height: {mmap_res}px !important;
                 }}
             </style>
         </head>
@@ -145,8 +145,8 @@ class Minimap_Generator():
             map_html = m.get_root().render()
 
             # Combine with the template
-            full_html = self.html_template.format(map_script=map_html)
-
+            full_html = self.html_template.format(map_script=map_html, mmap_res=self.minimap_resolution)
+            
             # Save the combined HTML to a file
             html_file = f'minimap/map_{i}.html'
             with open(html_file, 'w') as file:
@@ -196,8 +196,9 @@ def main():
     datetime_format = conf.get("General", "DatetimeFormat")
     video_fps = int(conf.get("General", "VideoFPS"))
     video_speed = int(conf.get("General", "VideoSpeed"))
+    mmap_scale = int(conf.get("Minimap", "MinimapScale"))
 
-    mmap = Minimap_Generator(data_path, resolution, datetime_format, video_fps, video_speed)
+    mmap = Minimap_Generator(data_path, resolution, datetime_format, video_fps, video_speed, mmap_scale)
     
     mmap.generate_video()
     mmap.generate_ffmpeg_command()
@@ -208,11 +209,6 @@ def main():
     '-preset', 'veryfast', f'video_out/{video_output_name}'
     ]
     subprocess.run(command)
-    # subprocess.run(["ffmpeg", "-i", "video_in/umhab-147.mp4", "-vf", "\"movie=minimap.mp4", "[over];", "[in][over]", "overlay=0:main_h-overlay_h,", "sendcmd=f=altitude.cmd,drawtext=text=''\"", "-preset", "veryfast", "video_out/test.mp4"])
-
-
-# ffmpeg -i video_in/umhab-147.mp4 -vf "movie=minimap.mp4 [over]; [in][over] overlay=0:main_h-overlay_h, sendcmd=f=altitude.cmd,drawtext=text=''" -preset veryfast video_out/test.mp4
-
 
 if __name__ == "__main__":
     main()
