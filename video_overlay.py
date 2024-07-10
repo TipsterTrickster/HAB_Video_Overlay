@@ -11,14 +11,15 @@ import configparser
 import subprocess
 
 class Minimap_Generator():
-    def __init__(self, data_path, resolution, dt_format, vid_fps, vid_speed, mmap_scale):
+    def __init__(self, data_path, resolution, dt_format, vid_fps, vid_speed, mmap_scale, mmap_zoom):
         self.resolution = resolution
         self.minimap_resolution = int(self.resolution / mmap_scale)
         self.data_path = data_path
         self.dt_format = dt_format
         self.vid_fps = vid_fps
         self.vid_speed = vid_speed
-        self.time_data, self.lat_data, self.lon_data, self.altitude_data = self.read_csv_loonatec(data_path, 2780, 9345)
+        self.time_data, self.lat_data, self.lon_data, self.altitude_data = self.read_csv_loonatec(data_path)
+        self.mmap_zoon = mmap_zoom
 
         self.html_template = """
         <!DOCTYPE html>
@@ -70,7 +71,7 @@ class Minimap_Generator():
             times.append(time_difference.total_seconds())
         return times
     
-    def read_csv_NEBP(self, file_path, start, end):
+    def read_csv_NEBP(self, file_path):
         datetimes = []
         times = []
         lats = []
@@ -85,9 +86,9 @@ class Minimap_Generator():
                 altitudes.append(float(row['altitude']))
         
         times = self.convert_datetime(datetimes)
-        return times[start:end], lats[start:end], lons[start:end], altitudes[start:end]
+        return times, lats, lons, altitudes
 
-    def read_csv_loonatec(self, file_path, start, end):
+    def read_csv_loonatec(self, file_path):
         times = []
         lats = []
         lons = []
@@ -100,8 +101,9 @@ class Minimap_Generator():
                 lons.append(float(row['Longitude (deg)']))
                 altitudes.append(float(row['Altitude (m)']))
         
+        start = times[0]
         times = [time - start for time in times]
-        return times[start:end], lats[start:end], lons[start:end], altitudes[start:end]
+        return times, lats, lons, altitudes
 
     def interpolate_location(self, times, lats, lons, fps, speed):
         times = [x / speed for x in times]
@@ -136,7 +138,7 @@ class Minimap_Generator():
         coords = list(zip(lat_data, lon_data))
 
         for i, loc in enumerate(coords):
-            m = folium.Map(location=loc, zoom_start=12)
+            m = folium.Map(location=loc, zoom_start=self.mmap_zoon)
             folium.Marker(location=loc).add_to(m)
             if i > 0:
                 folium.PolyLine(coords[:i+1]).add_to(m)
@@ -177,7 +179,7 @@ class Minimap_Generator():
 
         drawtext_filters = []
         for frame, altitude in enumerate(interpolated_altitudes):
-            drawtext_filters.append(f"{frame / self.vid_fps}-{(frame + 1) / self.vid_fps} [enter] drawtext reinit text='Altitude\\: {altitude:.2f}m':x=(w-text_w)/2:y=H-th-10:fontsize=48:fontcolor=white:box=1:boxborderw=10:boxcolor=black@0.5")
+            drawtext_filters.append(f"{frame / self.vid_fps}-{(frame + 1) / self.vid_fps} [enter] drawtext reinit text='Altitude\\: {altitude:.2f}m':x=(w-text_w)/2:y=H-th-10:fontsize={self.resolution / 22.5}:fontcolor=white:box=1:boxborderw=10:boxcolor=black@0.5")
         
         filter_complex = ";\n".join(drawtext_filters)
 
@@ -196,16 +198,23 @@ def main():
     datetime_format = conf.get("General", "DatetimeFormat")
     video_fps = int(conf.get("General", "VideoFPS"))
     video_speed = int(conf.get("General", "VideoSpeed"))
-    mmap_scale = int(conf.get("Minimap", "MinimapScale"))
+    mmap_scale = float(conf.get("Minimap", "MinimapScale"))
+    mmap_opacity = float(conf.get("Minimap", "MinimapOpacity"))
+    mmap_zoom = int(conf.get("Minimap", "MinimapZoom"))
 
-    mmap = Minimap_Generator(data_path, resolution, datetime_format, video_fps, video_speed, mmap_scale)
+    mmap = Minimap_Generator(data_path, resolution, datetime_format, video_fps, video_speed, mmap_scale, mmap_zoom)
     
     mmap.generate_video()
     mmap.generate_ffmpeg_command()
 
+    # command = [
+    # 'ffmpeg', '-i', f'video_in/{video_input_name}', '-vf',
+    # 'movie=minimap.mp4 [over]; [in][over] overlay=main_w-overlay_w:0, sendcmd=f=altitude.cmd,drawtext=text=\'\'',
+    # '-preset', 'veryfast', f'video_out/{video_output_name}'
+    # ]
     command = [
-    'ffmpeg', '-i', f'video_in/{video_input_name}', '-vf',
-    'movie=minimap.mp4 [over]; [in][over] overlay=main_w-overlay_w:0, sendcmd=f=altitude.cmd,drawtext=text=\'\'',
+    'ffmpeg', '-i', f'video_in/{video_input_name}', '-i', 'minimap.mp4', '-filter_complex',
+    f'[1]format=rgba,colorchannelmixer=aa={mmap_opacity}[over];[0][over]overlay=main_w-overlay_w:0,sendcmd=f=altitude.cmd,drawtext=text=\'\'',
     '-preset', 'veryfast', f'video_out/{video_output_name}'
     ]
     subprocess.run(command)
