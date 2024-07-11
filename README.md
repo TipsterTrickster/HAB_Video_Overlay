@@ -11,7 +11,7 @@ VideoOutputName: What you want the output video to be named and put in video_out
 DatetimeFormat: Datetime format if the data doesn't contain seconds since startup
 Resolution: resolution of the input video
 VideoFPS: Frames per second of input video
-VideoSpeed: How much the video is sped up by
+VideoSpeed (float): How much the video is sped up by
 
 ### Minimap
 MinimapScale (float): How muc the minimap will be scaled down by from the originial video

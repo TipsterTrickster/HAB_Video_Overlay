@@ -11,15 +11,21 @@ import configparser
 import subprocess
 
 class Minimap_Generator():
-    def __init__(self, data_path, resolution, dt_format, vid_fps, vid_speed, mmap_scale, mmap_zoom):
+    def __init__(self, data_path, resolution, dt_format, vid_fps, vid_speed, mmap_scale, mmap_zoom, alt_units, use_dt, dt_name, seconds_name, alt_name, lat_name, lon_name):
         self.resolution = resolution
         self.minimap_resolution = int(self.resolution / mmap_scale)
         self.data_path = data_path
         self.dt_format = dt_format
         self.vid_fps = vid_fps
         self.vid_speed = vid_speed
-        self.time_data, self.lat_data, self.lon_data, self.altitude_data = self.read_csv_loonatec(data_path)
         self.mmap_zoon = mmap_zoom
+        self.alt_units = alt_units
+
+        if use_dt == "True":
+            self.time_data, self.lat_data, self.lon_data, self.altitude_data = self.read_csv_NEBP(data_path, dt_name, alt_name, lat_name, lon_name)
+        else:
+            self.time_data, self.lat_data, self.lon_data, self.altitude_data = self.read_csv_loonatec(data_path, seconds_name, alt_name, lat_name, lon_name)
+
 
         self.html_template = """
         <!DOCTYPE html>
@@ -71,7 +77,7 @@ class Minimap_Generator():
             times.append(time_difference.total_seconds())
         return times
     
-    def read_csv_NEBP(self, file_path):
+    def read_csv_NEBP(self, file_path, dt_name, alt_name, lat_name, lon_name):
         datetimes = []
         times = []
         lats = []
@@ -80,15 +86,15 @@ class Minimap_Generator():
         with open(file_path, 'r') as file:
             reader = csv.DictReader(file)
             for row in reader:
-                datetimes.append(row['datetime'])
-                lats.append(float(row['latitude']))
-                lons.append(float(row['longitude']))
-                altitudes.append(float(row['altitude']))
+                datetimes.append(row[dt_name])
+                lats.append(float(row[lat_name]))
+                lons.append(float(row[lon_name]))
+                altitudes.append(float(row[alt_name]))
         
         times = self.convert_datetime(datetimes)
         return times, lats, lons, altitudes
 
-    def read_csv_loonatec(self, file_path):
+    def read_csv_loonatec(self, file_path, seconds_name, alt_name, lat_name, lon_name):
         times = []
         lats = []
         lons = []
@@ -96,13 +102,14 @@ class Minimap_Generator():
         with open(file_path, 'r') as file:
             reader = csv.DictReader(file)
             for row in reader:
-                times.append(float(row['MET']))
-                lats.append(float(row['Latitude (deg)']))
-                lons.append(float(row['Longitude (deg)']))
-                altitudes.append(float(row['Altitude (m)']))
+                times.append(float(row[seconds_name]))
+                lats.append(float(row[lat_name]))
+                lons.append(float(row[lon_name]))
+                altitudes.append(float(row[alt_name]))
         
         start = times[0]
         times = [time - start for time in times]
+
         return times, lats, lons, altitudes
 
     def interpolate_location(self, times, lats, lons, fps, speed):
@@ -131,8 +138,6 @@ class Minimap_Generator():
             subprocess.run(command)
 
     def generate_video(self):
-        # time_data, lat_data, lon_data = self.read_csv_loonatec(data_path, 2780, 9345)
-
         lat_data, lon_data = self.interpolate_location(self.time_data, self.lat_data, self.lon_data, 1, self.vid_speed)
 
         coords = list(zip(lat_data, lon_data))
@@ -175,11 +180,11 @@ class Minimap_Generator():
     def generate_ffmpeg_command(self):
 
         # time_data, alt_data = self.read_csv_loonatec_Altitude(self.data_path, 2780, 9345)
-        interpolated_altitudes = self.interpolate_altitude(self.time_data, self.altitude_data, 30, 64)
+        interpolated_altitudes = self.interpolate_altitude(self.time_data, self.altitude_data, self.vid_fps, self.vid_speed)
 
         drawtext_filters = []
         for frame, altitude in enumerate(interpolated_altitudes):
-            drawtext_filters.append(f"{frame / self.vid_fps}-{(frame + 1) / self.vid_fps} [enter] drawtext reinit text='Altitude\\: {altitude:.2f}m':x=(w-text_w)/2:y=H-th-10:fontsize={self.resolution / 22.5}:fontcolor=white:box=1:boxborderw=10:boxcolor=black@0.5")
+            drawtext_filters.append(f"{frame / self.vid_fps}-{(frame + 1) / self.vid_fps} [enter] drawtext reinit text='Altitude\\: {altitude:.2f}{self.alt_units}':x=(w-text_w)/2:y=H-th-10:fontsize={self.resolution / 22.5}:fontcolor=white:box=1:boxborderw=10:boxcolor=black@0.5")
         
         filter_complex = ";\n".join(drawtext_filters)
 
@@ -193,16 +198,23 @@ def main():
 
     video_input_name = conf.get("General", "VideoInputName")
     video_output_name = conf.get("General", "VideoOutputName")
-    data_path = conf.get("General", "DataPath")
+    data_path = conf.get("Data", "DataPath")
     resolution = int(conf.get("General", "Resolution"))
     datetime_format = conf.get("General", "DatetimeFormat")
     video_fps = int(conf.get("General", "VideoFPS"))
-    video_speed = int(conf.get("General", "VideoSpeed"))
+    video_speed = float(conf.get("General", "VideoSpeed"))
     mmap_scale = float(conf.get("Minimap", "MinimapScale"))
     mmap_opacity = float(conf.get("Minimap", "MinimapOpacity"))
     mmap_zoom = int(conf.get("Minimap", "MinimapZoom"))
+    alt_units = conf.get("Altitude", "AltitudeUnits")
+    use_dt = conf.get("Data", "UseDatetime")
+    dt_name = conf.get("Data", "DatetimeColumn")
+    seconds_name = conf.get("Data", "SecondsColumn")
+    alt_name = conf.get("Data", "AltitudeColumn")
+    lat_name = conf.get("Data", "LatitudeColumn")
+    lon_name = conf.get("Data", "LongitudeColumn")
 
-    mmap = Minimap_Generator(data_path, resolution, datetime_format, video_fps, video_speed, mmap_scale, mmap_zoom)
+    mmap = Minimap_Generator(data_path, resolution, datetime_format, video_fps, video_speed, mmap_scale, mmap_zoom, alt_units, use_dt, dt_name, seconds_name, alt_name, lat_name, lon_name)
     
     mmap.generate_video()
     mmap.generate_ffmpeg_command()
